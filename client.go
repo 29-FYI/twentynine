@@ -3,6 +3,7 @@ package twentynine
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -32,7 +33,11 @@ func PostLink(link Link) (err error) {
 		return
 	}
 
-	err = json.NewDecoder(r.Body).Decode(&link)
+	if err = json.NewDecoder(r.Body).Decode(&link); err != io.EOF {
+		return
+	}
+
+	err = nil
 	return
 }
 
@@ -51,6 +56,10 @@ func GetLinks() (links []Link, err error) {
 		return
 	}
 
-	err = json.NewDecoder(r.Body).Decode(&links)
+	if err = json.NewDecoder(r.Body).Decode(&links); err != io.EOF {
+		return
+	}
+
+	err = nil
 	return
 }
