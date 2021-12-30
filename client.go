@@ -6,47 +6,39 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
-const (
-	TwentyNine       = 29
-	TwentyNineApiUrl = "https://api.29.fyi"
-)
-
-func PostLink(link Link) (err error) {
-	buf := new(bytes.Buffer)
-	if err = json.NewEncoder(buf).Encode(link); err != nil {
-		return
-	}
-
-	r, err := http.Post(TwentyNineApiUrl, "application/json", buf)
-	if err != nil {
-		return
-	}
-
-	if r.StatusCode != http.StatusCreated {
-		msgBuf, _ := ioutil.ReadAll(r.Body)
-		err = Error{
-			Code:    r.StatusCode,
-			Message: string(msgBuf),
-		}
-		return
-	}
-
-	if err = json.NewDecoder(r.Body).Decode(&link); err != io.EOF {
-		return
-	}
-
-	err = nil
-	return
+type Client struct {
+	url  string
+	http http.Client
 }
 
-func GetLinks() (links []Link, err error) {
-	r, err := http.Get(TwentyNineApiUrl)
+type ClientOption func(cli *Client)
+
+func OptTimeout(timeout time.Duration) ClientOption {
+	return func(cli *Client) { cli.http.Timeout = timeout }
+}
+
+func OptURL(rawurl string) ClientOption {
+	return func(cli *Client) { cli.url = rawurl }
+}
+
+func NewClient(opts ...ClientOption) *Client {
+	c := &Client{
+		url: TwentyNineApiUrl,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func (cli *Client) Links() (links []Link, err error) {
+	r, err := cli.http.Get(cli.url)
 	if err != nil {
 		return
 	}
-
 	if r.StatusCode != http.StatusOK {
 		msgBuf, _ := ioutil.ReadAll(r.Body)
 		err = Error{
@@ -55,11 +47,33 @@ func GetLinks() (links []Link, err error) {
 		}
 		return
 	}
-
 	if err = json.NewDecoder(r.Body).Decode(&links); err != io.EOF {
 		return
 	}
+	err = nil // err ?= io.EOF
+	return
+}
 
-	err = nil
+func (cli *Client) LinkLink(link Link) (err error) {
+	buf := new(bytes.Buffer)
+	if err = json.NewEncoder(buf).Encode(link); err != nil {
+		return
+	}
+	r, err := cli.http.Post(cli.url, "application/json", buf)
+	if err != nil {
+		return
+	}
+	if r.StatusCode != http.StatusOK {
+		msgBuf, _ := ioutil.ReadAll(r.Body)
+		err = Error{
+			Code:    r.StatusCode,
+			Message: string(msgBuf),
+		}
+		return
+	}
+	if err = json.NewDecoder(r.Body).Decode(&link); err != io.EOF {
+		return
+	}
+	err = nil // err ?= io.EOF
 	return
 }
